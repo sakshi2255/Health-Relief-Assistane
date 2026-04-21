@@ -8,6 +8,8 @@ import 'package:flutter_projectt/screens/emergency_screen.dart';
 import 'package:flutter_projectt/screens/nearby_screen.dart';
 import 'package:flutter_projectt/screens/water_reminder_screen.dart';
 import 'package:flutter_projectt/screens/reminders_screen.dart';
+import 'package:flutter_projectt/screens/exercise_detail_screen.dart';
+import '../models/exercise_model.dart';
 import '../widgets/tr_text.dart';
 import '../services/upload_service.dart';
 
@@ -59,7 +61,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ Requirement 1: Get screen width for dynamic padding
     double screenWidth = MediaQuery.of(context).size.width;
     bool isSmallScreen = screenWidth < 360;
 
@@ -81,7 +82,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // ✅ Requirement 2: Translated Greeting
                         const TrText("Good Morning", style: TextStyle(fontSize: 22)),
                         Text(userName,
                           style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
@@ -105,9 +105,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
             const SizedBox(height: 20),
 
-            // 🚨 THE TEMPORARY UPLOAD BUTTON
-
-
             // 2. Hero Card
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -125,7 +122,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         const Icon(LucideIcons.flame, color: Colors.white70, size: 16),
                         const SizedBox(width: 8),
-                        TrText("Today's Goal", style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w500)),
+                        const TrText("Today's Goal", style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w500)),
                       ],
                     ),
                     const SizedBox(height: 12),
@@ -156,7 +153,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 16),
 
-            // ✅ Requirement 1: Responsive Grid for Quick Actions
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
@@ -177,7 +173,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
-
 
             const SizedBox(height: 24),
 
@@ -219,21 +214,87 @@ class _HomeScreenState extends State<HomeScreen> {
 
             const SizedBox(height: 24),
 
-            // 6. Suggested Workouts
+            // 6. Suggested Workouts (NOW DYNAMIC)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const TrText("Suggested Workouts", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  TextButton(onPressed: () {}, child: const TrText("See All", style: TextStyle(color: Color(0xFF4DB6AC)))),
+                  TextButton(
+                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const BodySelectScreen())),
+                      child: const TrText("See All", style: TextStyle(color: Color(0xFF4DB6AC)))
+                  ),
                 ],
               ),
             ),
 
-            _workoutCard("Neck Pain Relief", "15 min", "8 exercises", const Color(0xFF4DB6AC), "Beginner"),
-            _workoutCard("Lower Back Stretch", "20 min", "12 exercises", const Color(0xFF00796B), "Intermediate"),
-            _workoutCard("Knee Mobility", "10 min", "6 exercises", Colors.orange, "Beginner"),
+            // ✅ Dynamic stream pulling up to 3 exercises from Firestore
+            StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance.collection('exercises').limit(3).snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Padding(
+                    padding: EdgeInsets.all(40.0),
+                    child: Center(child: CircularProgressIndicator(color: Color(0xFF4DB6AC))),
+                  );
+                }
+
+                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  return const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+                    child: TrText("No workouts available yet.", style: TextStyle(color: Colors.grey)),
+                  );
+                }
+
+                // Aesthetic colors to cycle through for dynamic cards
+                final cardColors = [const Color(0xFF4DB6AC), const Color(0xFF00796B), Colors.orange];
+
+                return Column(
+                  children: snapshot.data!.docs.asMap().entries.map((entry) {
+                    int index = entry.key;
+                    var doc = entry.value;
+                    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+
+                    // Safely parse Firestore document into our ExerciseModel
+                    ExerciseModel exercise = ExerciseModel(
+                      id: doc.id,
+                      targetBodyPart: data['targetBodyPart'] ?? "Full Body",
+                      category: data['category'] ?? "Wellness",
+                      level: data['level'] ?? "Beginner",
+                      maxPainScore: data['maxPainScore'] ?? 10,
+                      youtubeId: data['youtubeId'] ?? "",
+                      titles: Map<String, String>.from(data['titles'] ?? {'en': data['title'] ?? 'Workout'}),
+                      descriptions: Map<String, String>.from(data['descriptions'] ?? {'en': 'No description'}),
+                      clinicalBenefit: data['clinicalBenefit'] ?? "",
+                      reps: data['reps']?.toString() ?? "10",
+                      sets: data['sets']?.toString() ?? "3",
+                      holdTime: data['holdTime']?.toString() ?? "10s",
+                      caution: data['caution'] ?? "",
+                      targetSymptoms: List<String>.from(data['targetSymptoms'] ?? []),
+                    );
+
+                    String title = exercise.titles['en'] ?? "Workout";
+                    Color cardColor = cardColors[index % cardColors.length];
+
+                    return InkWell(
+                      onTap: () {
+                        Navigator.push(context, MaterialPageRoute(
+                            builder: (context) => ExerciseDetailScreen(exercise: exercise)
+                        ));
+                      },
+                      child: _workoutCard(
+                          title,
+                          "${exercise.sets} Sets",
+                          "${exercise.reps} Reps",
+                          cardColor,
+                          exercise.level
+                      ),
+                    );
+                  }).toList(),
+                );
+              },
+            ),
 
             const SizedBox(height: 30),
           ],
@@ -242,30 +303,8 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _statCard(IconData icon, String value, String label, Color color) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8)],
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: color, size: 18),
-            const SizedBox(height: 8),
-            Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            // ✅ Requirement 2: Translated Stat Label
-            TrText(label, style: const TextStyle(color: Colors.grey, fontSize: 10)),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _quickActionItem(IconData icon, String label, Color bgColor, Color iconColor, VoidCallback onTap) {
-    return Expanded( // Added Expanded to ensure equal distribution
+    return Expanded(
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(20),
@@ -278,7 +317,6 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Icon(icon, color: iconColor, size: 22),
             ),
             const SizedBox(height: 8),
-            // ✅ Requirement 2: Translated Quick Action Label
             TrText(label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w600, height: 1.2)),
           ],
         ),

@@ -1,7 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_sign_in/google_sign_in.dart'; // NEW IMPORT
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -55,7 +56,7 @@ class AuthService {
     await _auth.signOut();
   }
 
-  // 4. Forgot Password Logic (NEW)
+  // 4. Forgot Password Logic
   Future<String?> resetPassword({required String email}) async {
     try {
       await _auth.sendPasswordResetEmail(email: email);
@@ -67,18 +68,15 @@ class AuthService {
     }
   }
 
-  // 5. Google Sign-In Logic (NEW)
-  // 5. Google Sign-In Logic (Hybrid for Web & Android)
+  // 5. Google Sign-In Logic
   Future<String?> signInWithGoogle() async {
     try {
       UserCredential result;
 
       if (kIsWeb) {
-        // --- CHROME / WEB FLOW ---
         GoogleAuthProvider authProvider = GoogleAuthProvider();
         result = await _auth.signInWithPopup(authProvider);
       } else {
-        // --- ANDROID / PLAY STORE FLOW ---
         final GoogleSignIn googleSignIn = GoogleSignIn();
         final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
 
@@ -93,7 +91,6 @@ class AuthService {
         result = await _auth.signInWithCredential(credential);
       }
 
-      // --- SAVE USER TO FIRESTORE (Same for both) ---
       User? user = result.user;
       if (user != null) {
         DocumentSnapshot doc = await _firestore.collection('users').doc(user.uid).get();
@@ -108,6 +105,85 @@ class AuthService {
         }
       }
       return "success";
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  // 6. Change Password (NEW)
+  // 6. Change Password Logic
+  Future<String?> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    try {
+      User? user = _auth.currentUser;
+      if (user == null) return "No user is currently logged in.";
+
+      // Step 1: Re-authenticate user to prove their identity
+      AuthCredential credential = EmailAuthProvider.credential(
+        email: user.email!,
+        password: currentPassword,
+      );
+
+      await user.reauthenticateWithCredential(credential);
+
+      // Step 2: Update to the new password
+      await user.updatePassword(newPassword);
+
+      return "success";
+    } on FirebaseAuthException catch (e) {
+      return e.message; // Returns Firebase errors (e.g., "Wrong password")
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  // 7. Delete Account (NEW)
+  Future<String?> deleteAccount({String? password}) async {
+    try {
+      User? user = _auth.currentUser;
+      if (user == null) return "No user logged in";
+
+      // Check if user signed in with Google or Email/Password
+      bool isGoogleUser = user.providerData.any((userInfo) => userInfo.providerId == 'google.com');
+
+      // Re-authenticate before deletion
+      if (isGoogleUser) {
+        if (kIsWeb) {
+          GoogleAuthProvider authProvider = GoogleAuthProvider();
+          await user.reauthenticateWithPopup(authProvider);
+        } else {
+          final GoogleSignIn googleSignIn = GoogleSignIn();
+          final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+          if (googleUser != null) {
+            final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+            final AuthCredential credential = GoogleAuthProvider.credential(
+              accessToken: googleAuth.accessToken,
+              idToken: googleAuth.idToken,
+            );
+            await user.reauthenticateWithCredential(credential);
+          } else {
+            return "Google re-authentication canceled.";
+          }
+        }
+      } else {
+        if (password == null || password.isEmpty) return "Password is required to delete account.";
+        AuthCredential credential = EmailAuthProvider.credential(
+          email: user.email!,
+          password: password,
+        );
+        await user.reauthenticateWithCredential(credential);
+      }
+
+      // Delete from Firestore
+      await _firestore.collection('users').doc(user.uid).delete();
+      // Delete Auth record
+      await user.delete();
+
+      return "success";
+    } on FirebaseAuthException catch (e) {
+      return e.message;
     } catch (e) {
       return e.toString();
     }

@@ -48,10 +48,25 @@ dependencies:
   google_cloud_translation: 0.0.4
   flutter_dotenv: ^6.0.0
 dev_dependencies:
+
   flutter_test:
     sdk: flutter
   google_cloud_translation: 0.0.4
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.13.1
+  flutter_native_splash: ^2.4.1
+
+flutter_launcher_icons:
+    android: true
+    ios: false
+    image_path: "assets/logo.jpg"
+    min_sdk_size: 21
+
+flutter_native_splash:
+    color: "#ffffff"
+    image: "assets/logo.jpg"
+    android: true
+    ios: false
 
 flutter:
 

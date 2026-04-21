@@ -3,7 +3,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'home_screen.dart';
 import 'profile_screen.dart';
 import 'exercise_detail_screen.dart';
-import 'favorites_screen.dart';
+
 import 'nearby_screen.dart';
 import '../models/exercise_model.dart';
 import '../services/translation_controller.dart';
@@ -59,7 +59,7 @@ class _MainShellState extends State<MainShell> {
   Widget build(BuildContext context) {
     final List<Widget> _pages = [
       const HomeScreen(),
-      const FavoritesScreen(),
+
       ExerciseDetailScreen(exercise: featuredExercise),
       const NearbyScreen(),
       const ProfileScreen(),
@@ -87,10 +87,7 @@ class _MainShellState extends State<MainShell> {
             icon: Icon(LucideIcons.home, size: iconSize),
             label: 'Home', // ✅ To fix the error quickly, use plain strings
           ),
-          BottomNavigationBarItem(
-            icon: Icon(LucideIcons.heart, size: iconSize),
-            label: 'Favorites',
-          ),
+
           BottomNavigationBarItem(
             icon: Icon(LucideIcons.flame, size: iconSize),
             label: 'Exercise',
